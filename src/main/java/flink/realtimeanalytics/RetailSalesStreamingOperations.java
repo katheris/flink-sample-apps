@@ -1,17 +1,23 @@
 package flink.realtimeanalytics;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import flink.datasource.KafkaSourceDataGenerator;
-import java.util.Properties;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.Duration;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
+import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.functions.KeySelector;
-import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.connector.base.DeliveryGuarantee;
 import org.apache.flink.connector.file.src.FileSource;
 import org.apache.flink.connector.file.src.reader.TextLineInputFormat;
+import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
+import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.core.fs.Path;
@@ -22,10 +28,11 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
 import org.apache.flink.util.Collector;
 
 public class RetailSalesStreamingOperations {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper() ;
+
     public static void main(String[] args) {
 
         try {
@@ -38,7 +45,7 @@ public class RetailSalesStreamingOperations {
                     FileSource.forRecordStreamFormat(new TextLineInputFormat(), new Path(dataDir))
                             .build();
             final DataStream<Product> productsObj =
-                    streamEnv.fromSource(fileSrc, WatermarkStrategy.noWatermarks(), "products")
+                    streamEnv.fromSource(fileSrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(1)), "products")
                             .map(new MapFunction<String, Product>() {
                                 @Override
                                 public Product map(String value) throws Exception {
@@ -47,14 +54,10 @@ public class RetailSalesStreamingOperations {
                                 }
                             });
 
-
-
-            Properties properties = new Properties();
-            properties.setProperty("bootstrap.servers", "localhost:9092");
-            properties.setProperty("group.id", "flink.realtime.analytics");
+            String bootstrapServers = "localhost:9092";
 
             KafkaSource<String> kafkaSrc = KafkaSource.<String>builder()
-                    .setBootstrapServers("localhost:9092")
+                    .setBootstrapServers(bootstrapServers)
                     .setTopics("flink.sales.records")
                     .setGroupId("flink.realtime.analytics")
                     .setStartingOffsets(OffsetsInitializer.latest())
@@ -82,9 +85,9 @@ public class RetailSalesStreamingOperations {
 
             BroadcastStream<Product> productBroadcastStream = productsObj.broadcast(productMapStateDescriptor);
 
-            DataStream<Tuple2<String,Long>> matches = salesByProduct
+            DataStream<SalesByCategory> matches = salesByProduct
                     .connect(productBroadcastStream)
-                    .process(new KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, Tuple2<String,Long>>() {
+                    .process(new KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, SalesByCategory>() {
 
                          private final MapStateDescriptor<Integer,Product> productDesc =
                                  new MapStateDescriptor<>(
@@ -94,33 +97,51 @@ public class RetailSalesStreamingOperations {
                                 );
 
                         @Override
-                        public void processElement(SalesRecord salesRecord, KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, Tuple2<String, Long>>.ReadOnlyContext readOnlyContext, Collector<Tuple2<String, Long>> collector) throws Exception {
+                        public void processElement(SalesRecord salesRecord, KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, SalesByCategory>.ReadOnlyContext readOnlyContext, Collector<SalesByCategory> collector) throws Exception {
                             Product product = readOnlyContext.getBroadcastState(productDesc).get(salesRecord.productId);
 
                             if (product != null) {
                                 System.out.println("- Sale for category " + product.category + ": " + salesRecord.getQuantity());
-                                collector.collect(new Tuple2<String,Long>(product.category, salesRecord.getQuantity()));
+                                collector.collect(new SalesByCategory(product.category, salesRecord.getQuantity()));
                             }
-
                         }
 
                         @Override
-                        public void processBroadcastElement(Product product, KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, Tuple2<String, Long>>.Context context, Collector<Tuple2<String, Long>> collector) throws Exception {
+                        public void processBroadcastElement(Product product, KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, SalesByCategory>.Context context, Collector<SalesByCategory> collector) throws Exception {
                             context.getBroadcastState(productDesc).put(product.productId, product);
                         }
+
                     });
 
-            DataStream<Tuple2<String,Long>> salesByCategory = matches.keyBy(v -> v.f0)
+            // For demo purpose, window is set to 10 seconds
+            DataStream<SalesByCategory> salesByCategory = matches.keyBy(v -> v.getCategory())
                     .window(TumblingProcessingTimeWindows.of(Time.seconds(10)))
-                    .reduce(new ReduceFunction<Tuple2<String,Long>>() {
-
+                    .reduce(new ReduceFunction<SalesByCategory>() {
                         @Override
-                        public Tuple2<String, Long> reduce(Tuple2<String, Long> stringIntegerTuple2, Tuple2<String, Long> t1) throws Exception {
-                            return new Tuple2<String, Long>(stringIntegerTuple2.f0, stringIntegerTuple2.f1 + t1.f1);
+                        public SalesByCategory reduce(SalesByCategory salesByCategory, SalesByCategory t1) throws Exception {
+                            return new SalesByCategory(salesByCategory.getCategory(), salesByCategory.getSales() + t1.getSales());
                         }
                     });
 
             salesByCategory.print();
+
+            KafkaSink<SalesByCategory> kafkaProducer = KafkaSink.<SalesByCategory>builder()
+                    .setBootstrapServers(bootstrapServers)
+                    .setDeliveryGuarantee(DeliveryGuarantee.EXACTLY_ONCE)
+                    .setProperty("transaction.timeout.ms", "800000")
+                    .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                            .setTopic("flink.sales.by.category")
+                            .setValueSerializationSchema((SerializationSchema<SalesByCategory>) element -> {
+                                try {
+                                    return OBJECT_MAPPER.writeValueAsBytes(element);
+                                } catch (IOException e) {
+                                    throw new UncheckedIOException(e);
+                                }
+                            }).build()
+                    )
+                    .build();
+
+            salesByCategory.sinkTo(kafkaProducer);
 
             System.out.println("Starting sales data generator");
             Thread kafkaThread = new Thread(new KafkaSourceDataGenerator());
