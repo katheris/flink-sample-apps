@@ -1,41 +1,39 @@
-package flink.datasource;
+package flink.common;
 
 import java.util.Properties;
 import java.util.Random;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 
-public class KafkaSourceDataGenerator implements Runnable {
+public class SalesDataGenerator implements Runnable {
 
     public static void main(String[] args) {
-        KafkaSourceDataGenerator ksdg = new KafkaSourceDataGenerator();
+        SalesDataGenerator ksdg = new SalesDataGenerator();
         ksdg.run();
     }
 
     @Override
     public void run() {
+        //Create Kafka Client
+        Properties props = new Properties();
+        props.put("bootstrap.servers","localhost:9092");
+
+        props.put("key.serializer",
+                "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer",
+                "org.apache.kafka.common.serialization.StringSerializer");
+
+        Producer<String,String> producer = new KafkaProducer<String, String>(props);
 
         try {
-
-            //Create Kafka Client
-            Properties props = new Properties();
-            props.put("bootstrap.servers","localhost:9092");
-
-            props.put("key.serializer",
-                    "org.apache.kafka.common.serialization.StringSerializer");
-            props.put("value.serializer",
-                    "org.apache.kafka.common.serialization.StringSerializer");
-
-            Producer<String,String> producer = new KafkaProducer<String, String>(props);
 
             Random random = new Random();
 
             //Generate 100 sample sale records
-            for(int i=0; i < 2000; i++) {
+            while (true) {
 
-                String userId = String.valueOf(Math.abs(random.nextInt(500)));
+                String userId = String.valueOf(Math.abs(random.nextInt(100)));
 
                 String invoiceId = String.valueOf(Math.abs(random.nextLong()));
 
@@ -56,19 +54,19 @@ public class KafkaSourceDataGenerator implements Runnable {
                                 key,
                                 String.join(",", recordInCSV)  );
 
-                RecordMetadata rmd = producer.send(record).get();
+                producer.send(record).get();
 
-                System.out.println("Kafka Source Data Generator : Sending Event : "
-                        + String.join(",", recordInCSV));
+                System.out.println("Kafka Sales Data Generator : Sending Event with : "
+                        + "userId: " + recordInCSV[1] + " productId: " + recordInCSV[2]);
 
                 //Sleep for a random time ( 1 - 3 secs) before the next record.
                 Thread.sleep(random.nextInt(2000) + 1);
-
             }
-
 
         } catch (Exception e) {
             throw new RuntimeException(e);
+        } finally {
+            producer.close();
         }
     }
 }
