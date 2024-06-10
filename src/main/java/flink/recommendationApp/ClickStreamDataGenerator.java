@@ -50,7 +50,7 @@ public class ClickStreamDataGenerator implements Runnable{
                 System.out.println("Kafka Click Stream Generator : Sending Event with : " +
                         "userId: " + recordInCSV[0] + " productId: " + recordInCSV[1]);
 
-                Thread.sleep(10000);
+                Thread.sleep(3000);
 
             }
 

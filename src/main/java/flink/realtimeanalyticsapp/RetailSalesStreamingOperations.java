@@ -31,6 +31,20 @@ import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTime
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.util.Collector;
 
+/*
+Realtime Analytics Use Case
+
+Example: Retail Sales
+
+The scenario: Orinoco Inc wants a realtime dashboard of cumulative sales figures over the last hour, broken down by product category.
+
+The data:
+    - Input: A stream of sales (invoice id, user id, product id, quantity, unit cost)
+    - Input: A stream of products (product id, product category)
+
+Output: Product sales (product category, sales)
+*/
+
 public class RetailSalesStreamingOperations {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper() ;
     private static final String SALES_RECORDS_TOPIC = "flink.sales.records";

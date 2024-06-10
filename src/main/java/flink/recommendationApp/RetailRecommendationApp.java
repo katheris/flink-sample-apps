@@ -16,6 +16,27 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 
+/*
+Recommendation system use case
+
+Example: Retail Sales
+
+The scenario:
+    Orinoco Inc wants to display a widget on product pages of similar products that the user might be interested in buying.
+    They should recommend:
+        - Up to 6 highly rated products in the same category as that of the product the customer is currently viewing
+        - Only products that are in stock
+        - Products that the customer has bought before should be favoured
+        - TODO: Avoid showing suggestions that have already been made in previous pageviews
+
+The data:
+    - Input: A clickstream (user id, product id, event time)
+    - Input: A stream of purchases (user id, product id, purchase date)
+    - Input: An inventory of products (product id, product name, product category, number in stock, rating)
+
+Output: A stream of recommendations (user id, 6 product ids)
+*/
+
 public class RetailRecommendationApp {
     private static final String SALES_RECORDS_TOPIC = "flink.sales.records";
     private static final String CLICK_STREAMS_TOPIC = "flink.click.streams";
@@ -36,7 +57,8 @@ public class RetailRecommendationApp {
             final Schema clickStreamSchema = Schema.newBuilder()
                     .column("user_id", DataTypes.STRING())
                     .column("product_id", DataTypes.STRING())
-                    .columnByMetadata("click_ts", DataTypes.TIMESTAMP(3), "timestamp")
+                    .columnByMetadata("event_time", DataTypes.TIMESTAMP(3), "timestamp")
+                    .watermark("event_time", "event_time - INTERVAL '1' SECOND")
                     .build();
             tableEnv.createTemporaryTable("ClickStreamTable", TableDescriptor.forConnector("kafka")
                     .schema(clickStreamSchema)
@@ -65,7 +87,9 @@ public class RetailRecommendationApp {
                     .column("user_id", DataTypes.STRING())
                     .column("product_id", DataTypes.STRING())
                     .column("quantity", DataTypes.STRING())
-                    .column("unitCost", DataTypes.STRING())
+                    .column("unit_cost", DataTypes.STRING())
+                    .columnByMetadata("purchase_time", DataTypes.TIMESTAMP(3), "timestamp", true)
+                    .watermark("purchase_time", "purchase_time - INTERVAL '1' SECOND")
                     .build();
             tableEnv.createTemporaryTable("SalesRecordTable", TableDescriptor.forConnector("kafka")
                     .schema(salesRecordSchema)
@@ -78,8 +102,8 @@ public class RetailRecommendationApp {
 
             final Schema outputSchema = Schema.newBuilder()
                     .column("user_id", DataTypes.STRING().notNull())
-                    .column("product_id", DataTypes.STRING())
-                    .column("rating", DataTypes.STRING())
+                    .column("top_product_ids", DataTypes.STRING())
+                    .column("event_time", DataTypes.TIMESTAMP(3))
                     .primaryKey("user_id")
                     .build();
 
@@ -93,64 +117,64 @@ public class RetailRecommendationApp {
                     .build());
 
 
-            Table recommendation = tableEnv.sqlQuery("WITH ClickedProducts AS (\n" +
-                    "    SELECT DISTINCT\n" +
-                    "        cs.user_id,\n" +
-                    "        cs.click_ts,\n" +
-                    "        pi.category\n" +
-                    "    FROM\n" +
-                    "        ClickStreamTable cs\n" +
-                    "    JOIN\n" +
-                    "        ProductInventoryTable pi ON cs.product_id = pi.product_id\n" +
-                    "),\n" +
-                    "CategoryProducts AS (\n" +
+            //create a view of clicked products with category and click event time
+            tableEnv.executeSql("CREATE TEMPORARY VIEW clicked_products AS\n" +
+                    "SELECT DISTINCT\n" +
+                    "    c.user_id,\n" +
+                    "    c.event_time ,\n" +
+                    "    p.product_id,\n" +
+                    "    p.category\n" +
+                    "FROM ClickStreamTable AS c\n" +
+                    "JOIN ProductInventoryTable AS p ON c.product_id = p.product_id;");
+
+            //create a view of stocked and purchased products that are in the same category as the clicked products
+            tableEnv.executeSql("CREATE TEMPORARY VIEW category_products AS\n" +
+                    "SELECT\n" +
+                    "   cp.user_id,\n" +
+                    "   cp.event_time,\n" +
+                    "   p.product_id,\n" +
+                    "   p.category,\n" +
+                    "   p.stock,\n" +
+                    "   p.rating,\n" +
+                    "   sr.user_id as purchased\n" +
+                    "FROM clicked_products cp\n" +
+                    "JOIN ProductInventoryTable AS p ON cp.category = p.category\n" +
+                    "LEFT JOIN SalesRecordTable sr ON cp.user_id = sr.user_id AND p.product_id = sr.product_id\n" +
+                    "WHERE p.stock > 0\n" +
+                    "GROUP BY \n" +
+                    "    p.product_id,\n" +
+                    "    p.category, \n" +
+                    "    p.stock, \n" +
+                    "    cp.user_id, \n" +
+                    "    cp.event_time, \n" +
+                    "    sr.user_id, \n" +
+                    "    p.rating;");
+
+            //create a view of products ordered by the rating
+            tableEnv.executeSql("CREATE TEMPORARY VIEW top_products AS\n" +
                     "    SELECT\n" +
                     "         cp.user_id,\n" +
-                    "         cp.click_ts,\n" +
-                    "         pi2.product_id,\n" +
-                    "         pi2.category,\n" +
-                    "         pi2.stock,\n" +
-                    "         pi2.rating,\n" +
-                    "         sr.user_id AS purchased\n" +
-                    "     FROM\n" +
-                    "         ClickedProducts cp\n" +
-                    "     JOIN\n" +
-                    "         ProductInventoryTable pi2 ON cp.category = pi2.category\n" +
-                    "     LEFT JOIN\n" +
-                    "         SalesRecordTable sr ON cp.user_id = sr.user_id AND pi2.product_id = sr.product_id\n" +
-                    "     WHERE pi2.stock > 0\n" +
-                    "     GROUP BY \n" +
-                    "         pi2.product_id, \n" +
-                    "         pi2.category, \n" +
-                    "         pi2.stock, \n" +
-                    "         cp.user_id, \n" +
-                    "         cp.click_ts, \n" +
-                    "         sr.user_id, \n" +
-                    "         pi2.rating \n" +
-                    "),\n" +
-                    "RankedProducts AS (\n" +
-                    "    SELECT\n" +
-                    "         cp.user_id,\n" +
-                    "         cp.click_ts,\n" +
+                    "         cp.event_time,\n" +
                     "         cp.product_id,\n" +
                     "         cp.category,\n" +
                     "         cp.stock,\n" +
                     "         cp.rating,\n" +
                     "         cp.purchased,\n" +
-                    "         TUMBLE_END(click_ts, INTERVAL '5' SECOND),\n" +
                     "         ROW_NUMBER() OVER (PARTITION BY cp.user_id ORDER BY cp.purchased DESC, cp.rating DESC) AS rn\n" +
                     "    FROM\n" +
-                    "         CategoryProducts cp\n" +
-                    ")\n" +
-                    "SELECT\n" +
+                    "         category_products cp;");
+
+            //create a table of top 5 rated products, grouped by user and 5 seconds of window
+            // the output should be user_id with product ids separated by comma and window timestamp
+            Table recommendation = tableEnv.sqlQuery("SELECT\n" +
                     "    user_id,\n" +
-                    "    product_id,\n" +
-                    "    rating\n" +
-                    "FROM\n" +
-                    "    RankedProducts\n" +
-                    "WHERE\n" +
-                    "    rn = 1"
-            );
+                    "    LISTAGG(product_id, ',') AS top_product_ids,\n" +
+                    "    TUMBLE_END(event_time, INTERVAL '5' SECOND)\n" +
+                    "FROM top_products\n" +
+                    "WHERE rn <= 6\n" +
+                    "GROUP BY \n" +
+                    "    user_id,\n" +
+                    "    TUMBLE(event_time, INTERVAL '5' SECOND);");
 
             Properties props = new Properties();
             props.put("bootstrap.servers","localhost:9092");
@@ -161,7 +185,7 @@ public class RetailRecommendationApp {
             var outputTopic = new NewTopic(RECOMMENDATION_TOPIC, 1, (short) 1).configs(topicConfigs);
             admin.createTopics(Collections.singleton(outputTopic));
 
-            System.out.println("Starting File Data Generator...");
+            System.out.println("Starting Click Stream Data Generator...");
             Thread genThread = new Thread(new ClickStreamDataGenerator());
             genThread.start();
 
