@@ -1,4 +1,4 @@
-package flink.realtimeanalytics;
+package flink.realtimeanalyticsapp;
 
 
 public final class SalesByCategory {

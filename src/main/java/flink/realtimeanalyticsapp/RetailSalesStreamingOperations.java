@@ -1,7 +1,8 @@
-package flink.realtimeanalytics;
+package flink.realtimeanalyticsapp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import flink.datasource.KafkaSourceDataGenerator;
+import flink.common.SalesDataGenerator;
+import flink.common.SalesRecord;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
@@ -30,8 +31,24 @@ import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTime
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.util.Collector;
 
+/*
+Realtime Analytics Use Case
+
+Example: Retail Sales
+
+The scenario: Orinoco Inc wants a realtime dashboard of cumulative sales figures over the last hour, broken down by product category.
+
+The data:
+    - Input: A stream of sales (invoice id, user id, product id, quantity, unit cost)
+    - Input: A stream of products (product id, product category)
+
+Output: Product sales (product category, sales)
+*/
+
 public class RetailSalesStreamingOperations {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper() ;
+    private static final String SALES_RECORDS_TOPIC = "flink.sales.records";
+    private static final String SALES_BY_CATEGORY_TOPIC = "flink.sales.by.category";
 
     public static void main(String[] args) {
 
@@ -40,7 +57,7 @@ public class RetailSalesStreamingOperations {
             StreamExecutionEnvironment streamEnv = StreamExecutionEnvironment.getExecutionEnvironment();
             streamEnv.setParallelism(3);
 
-            String dataDir = "data/products.csv";
+            String dataDir = "data/productInventory.csv";
             final FileSource<String> fileSrc =
                     FileSource.forRecordStreamFormat(new TextLineInputFormat(), new Path(dataDir))
                             .build();
@@ -58,14 +75,14 @@ public class RetailSalesStreamingOperations {
 
             KafkaSource<String> kafkaSrc = KafkaSource.<String>builder()
                     .setBootstrapServers(bootstrapServers)
-                    .setTopics("flink.sales.records")
+                    .setTopics(SALES_RECORDS_TOPIC)
                     .setGroupId("flink.realtime.analytics")
                     .setStartingOffsets(OffsetsInitializer.latest())
                     .setValueOnlyDeserializer(new SimpleStringSchema())
                     .build();
 
             DataStream<SalesRecord> salesRecords =
-                    streamEnv.fromSource(kafkaSrc, WatermarkStrategy.noWatermarks(), "KafkaSource")
+                    streamEnv.fromSource(kafkaSrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(1)), "KafkaSource")
                             .map(new MapFunction<String, SalesRecord>() {
                 @Override
                 public SalesRecord map(String value) throws Exception {
@@ -75,7 +92,7 @@ public class RetailSalesStreamingOperations {
             });
 
             KeyedStream<SalesRecord,Integer> salesByProduct = salesRecords
-                    .keyBy((KeySelector<SalesRecord, Integer>) sale -> sale.productId);
+                    .keyBy((KeySelector<SalesRecord, Integer>) sale -> sale.getProductId());
 
             MapStateDescriptor<Integer, Product> productMapStateDescriptor = new MapStateDescriptor<Integer, Product>(
                     "ProductCategory",
@@ -98,7 +115,7 @@ public class RetailSalesStreamingOperations {
 
                         @Override
                         public void processElement(SalesRecord salesRecord, KeyedBroadcastProcessFunction<Integer, SalesRecord, Product, SalesByCategory>.ReadOnlyContext readOnlyContext, Collector<SalesByCategory> collector) throws Exception {
-                            Product product = readOnlyContext.getBroadcastState(productDesc).get(salesRecord.productId);
+                            Product product = readOnlyContext.getBroadcastState(productDesc).get(salesRecord.getProductId());
 
                             if (product != null) {
                                 System.out.println("- Sale for category " + product.category + ": " + salesRecord.getQuantity());
@@ -130,7 +147,7 @@ public class RetailSalesStreamingOperations {
                     .setDeliveryGuarantee(DeliveryGuarantee.EXACTLY_ONCE)
                     .setProperty("transaction.timeout.ms", "800000")
                     .setRecordSerializer(KafkaRecordSerializationSchema.builder()
-                            .setTopic("flink.sales.by.category")
+                            .setTopic(SALES_BY_CATEGORY_TOPIC)
                             .setValueSerializationSchema((SerializationSchema<SalesByCategory>) element -> {
                                 try {
                                     return OBJECT_MAPPER.writeValueAsBytes(element);
@@ -144,7 +161,7 @@ public class RetailSalesStreamingOperations {
             salesByCategory.sinkTo(kafkaProducer);
 
             System.out.println("Starting sales data generator");
-            Thread kafkaThread = new Thread(new KafkaSourceDataGenerator());
+            Thread kafkaThread = new Thread(new SalesDataGenerator());
             kafkaThread.start();
 
             streamEnv.execute("Computing sales by category for every hour");

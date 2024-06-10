@@ -1,4 +1,4 @@
-package flink.realtimeanalytics;
+package flink.common;
 
 public class SalesRecord {
     long invoiceId;
