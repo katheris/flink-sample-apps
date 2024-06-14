@@ -4,6 +4,7 @@ import flink.common.SalesDataGenerator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -77,7 +78,7 @@ public class RetailRecommendationApp {
                     .build();
             tableEnv.createTemporaryTable("ProductInventoryTable", TableDescriptor.forConnector("filesystem")
                     .schema(productInventorySchema)
-                    .option("path","data/productInventory.csv")
+                    .option("path", getFileFromResource("productInventory.csv"))
                     .format("csv")
                     .option("csv.ignore-parse-errors","true")
                     .build());
@@ -199,6 +200,10 @@ public class RetailRecommendationApp {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private static String getFileFromResource(String filename) {
+        return Objects.requireNonNull(RetailRecommendationApp.class.getClassLoader().getResource(filename)).getPath();
     }
 }
 
