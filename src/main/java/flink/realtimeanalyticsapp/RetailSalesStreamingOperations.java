@@ -6,6 +6,7 @@ import flink.common.SalesRecord;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.Objects;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
@@ -57,9 +58,8 @@ public class RetailSalesStreamingOperations {
             StreamExecutionEnvironment streamEnv = StreamExecutionEnvironment.getExecutionEnvironment();
             streamEnv.setParallelism(3);
 
-            String dataDir = "data/productInventory.csv";
             final FileSource<String> fileSrc =
-                    FileSource.forRecordStreamFormat(new TextLineInputFormat(), new Path(dataDir))
+                    FileSource.forRecordStreamFormat(new TextLineInputFormat(), new Path(getFileFromResource("productInventory.csv")))
                             .build();
             final DataStream<Product> productsObj =
                     streamEnv.fromSource(fileSrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(1)), "products")
@@ -169,5 +169,9 @@ public class RetailSalesStreamingOperations {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private static String getFileFromResource(String filename) {
+        return Objects.requireNonNull(RetailSalesStreamingOperations.class.getClassLoader().getResource(filename)).getPath();
     }
 }
