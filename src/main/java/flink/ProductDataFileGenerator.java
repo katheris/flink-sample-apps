@@ -1,4 +1,4 @@
-package flink.common;
+package flink;
 
 import java.io.BufferedReader;
 import java.io.FileReader;

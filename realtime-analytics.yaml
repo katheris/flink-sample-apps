@@ -1,0 +1,40 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: realtime-analytics
+spec:
+  image:  realtime-analytics:latest
+  imagePullPolicy: Never
+  flinkVersion: v1_19
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "1"
+    kubernetes.operator.job.restart.failed: "true"
+    state.savepoints.dir: file:///flink-data/savepoints
+    state.checkpoints.dir: file:///flink-data/checkpoints
+    high-availability: org.apache.flink.kubernetes.highavailability.KubernetesHaServicesFactory
+    high-availability.storageDir: file:///flink-data/ha
+  serviceAccount: flink
+  jobManager:
+    resource:
+      memory: "2048m"
+      cpu: 1
+  taskManager:
+    resource:
+      memory: "2048m"
+      cpu: 1
+  podTemplate:
+    spec:
+      containers:
+        - name: flink-main-container
+          volumeMounts:
+            - mountPath: /flink-data
+              name: flink-volume
+      volumes:
+        - name: flink-volume
+          persistentVolumeClaim:
+            claimName: realtime-analytics-pvc
+  job:
+    jarURI: local:///opt/flink/usrlib/realtime-analytics.jar
+    args: ["my-cluster-kafka-bootstrap.default.svc:9092", "mygroup1","/opt/flink/usrlib/productInventory.csv"]
+    parallelism: 1
+    upgradeMode: stateless

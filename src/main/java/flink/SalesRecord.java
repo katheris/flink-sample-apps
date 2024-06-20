@@ -1,4 +1,4 @@
-package flink.common;
+package flink;
 
 public class SalesRecord {
     long invoiceId;

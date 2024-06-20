@@ -1,4 +1,4 @@
-package flink.realtimeanalyticsapp;
+package flink;
 
 public class Product {
     int productId;

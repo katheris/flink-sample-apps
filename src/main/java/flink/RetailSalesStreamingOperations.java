@@ -1,8 +1,6 @@
-package flink.realtimeanalyticsapp;
+package flink;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import flink.common.SalesDataGenerator;
-import flink.common.SalesRecord;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
@@ -56,10 +54,23 @@ public class RetailSalesStreamingOperations {
         try {
 
             StreamExecutionEnvironment streamEnv = StreamExecutionEnvironment.getExecutionEnvironment();
-            streamEnv.setParallelism(3);
+            streamEnv.setParallelism(1);
+
+            String bootstrapServers;
+            String groupId;
+            Path productInventoryFilePath;
+            if (args.length > 0) {
+                bootstrapServers = args[0];
+                groupId = args[1];
+                productInventoryFilePath = new Path(args[2]);
+            } else {
+                bootstrapServers = "localhost:9092";
+                groupId = "flink.realtime.analytics";
+                productInventoryFilePath = new Path("data/productInventory.csv");
+            }
 
             final FileSource<String> fileSrc =
-                    FileSource.forRecordStreamFormat(new TextLineInputFormat(), new Path(getFileFromResource("productInventory.csv")))
+                    FileSource.forRecordStreamFormat(new TextLineInputFormat(), productInventoryFilePath)
                             .build();
             final DataStream<Product> productsObj =
                     streamEnv.fromSource(fileSrc, WatermarkStrategy.forBoundedOutOfOrderness(Duration.ofSeconds(1)), "products")
@@ -71,12 +82,10 @@ public class RetailSalesStreamingOperations {
                                 }
                             });
 
-            String bootstrapServers = "localhost:9092";
-
             KafkaSource<String> kafkaSrc = KafkaSource.<String>builder()
                     .setBootstrapServers(bootstrapServers)
                     .setTopics(SALES_RECORDS_TOPIC)
-                    .setGroupId("flink.realtime.analytics")
+                    .setGroupId(groupId)
                     .setStartingOffsets(OffsetsInitializer.latest())
                     .setValueOnlyDeserializer(new SimpleStringSchema())
                     .build();
@@ -161,7 +170,7 @@ public class RetailSalesStreamingOperations {
             salesByCategory.sinkTo(kafkaProducer);
 
             System.out.println("Starting sales data generator");
-            Thread kafkaThread = new Thread(new SalesDataGenerator());
+            Thread kafkaThread = new Thread(new SalesDataGenerator(bootstrapServers));
             kafkaThread.start();
 
             streamEnv.execute("Computing sales by category for every hour");
@@ -169,9 +178,5 @@ public class RetailSalesStreamingOperations {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private static String getFileFromResource(String filename) {
-        return Objects.requireNonNull(RetailSalesStreamingOperations.class.getClassLoader().getResource(filename)).getPath();
     }
 }

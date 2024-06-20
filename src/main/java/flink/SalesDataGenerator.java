@@ -1,4 +1,4 @@
-package flink.common;
+package flink;
 
 import java.util.Properties;
 import java.util.Random;
@@ -7,9 +7,13 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 public class SalesDataGenerator implements Runnable {
+    final String bootstrapServers;
+    public SalesDataGenerator(String bootstrapServers) {
+        this.bootstrapServers = bootstrapServers;
+    }
 
     public static void main(String[] args) {
-        SalesDataGenerator ksdg = new SalesDataGenerator();
+        SalesDataGenerator ksdg = new SalesDataGenerator(args[0]);
         ksdg.run();
     }
 
@@ -17,7 +21,7 @@ public class SalesDataGenerator implements Runnable {
     public void run() {
         //Create Kafka Client
         Properties props = new Properties();
-        props.put("bootstrap.servers","localhost:9092");
+        props.put("bootstrap.servers", bootstrapServers);
 
         props.put("key.serializer",
                 "org.apache.kafka.common.serialization.StringSerializer");
