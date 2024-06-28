@@ -1,6 +1,5 @@
-package flink.recommendationApp;
+package flink;
 
-import flink.common.SalesDataGenerator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -9,6 +8,7 @@ import java.util.Properties;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
+import org.apache.flink.table.api.StatementSet;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableDescriptor;
 import org.apache.flink.table.api.TableEnvironment;
@@ -55,6 +55,19 @@ public class RetailRecommendationApp {
             TableEnvironment tableEnv = TableEnvironment.create(settings);
             tableEnv.getConfig().set("parallelism.default", "1");
 
+            String bootstrapServers;
+            String groupId;
+            String productInventoryFilePath;
+            if (args.length > 0) {
+                bootstrapServers = args[0];
+                groupId = args[1];
+                productInventoryFilePath = args[2];
+            } else {
+                bootstrapServers = "localhost:9092";
+                groupId = "flink.product.recommendations";
+                productInventoryFilePath = "data/productInventory.csv";
+            }
+
             final Schema clickStreamSchema = Schema.newBuilder()
                     .column("user_id", DataTypes.STRING())
                     .column("product_id", DataTypes.STRING())
@@ -64,8 +77,8 @@ public class RetailRecommendationApp {
             tableEnv.createTemporaryTable("ClickStreamTable", TableDescriptor.forConnector("kafka")
                     .schema(clickStreamSchema)
                     .option("topic", CLICK_STREAMS_TOPIC)
-                    .option("properties.bootstrap.servers","localhost:9092")
-                    .option("properties.group.id", "flink.recommendation.app")
+                    .option("properties.bootstrap.servers", bootstrapServers)
+                    .option("properties.group.id", groupId)
                     .option("scan.startup.mode","latest-offset")
                     .format("csv")
                     .build());
@@ -78,7 +91,7 @@ public class RetailRecommendationApp {
                     .build();
             tableEnv.createTemporaryTable("ProductInventoryTable", TableDescriptor.forConnector("filesystem")
                     .schema(productInventorySchema)
-                    .option("path", getFileFromResource("productInventory.csv"))
+                    .option("path", productInventoryFilePath)
                     .format("csv")
                     .option("csv.ignore-parse-errors","true")
                     .build());
@@ -95,8 +108,8 @@ public class RetailRecommendationApp {
             tableEnv.createTemporaryTable("SalesRecordTable", TableDescriptor.forConnector("kafka")
                     .schema(salesRecordSchema)
                     .option("topic", SALES_RECORDS_TOPIC)
-                    .option("properties.bootstrap.servers","localhost:9092")
-                    .option("properties.group.id", "flink.recommendation.app")
+                    .option("properties.bootstrap.servers", bootstrapServers)
+                    .option("properties.group.id", groupId)
                     .option("scan.startup.mode","latest-offset")
                     .format("csv")
                     .build());
@@ -111,7 +124,7 @@ public class RetailRecommendationApp {
             tableEnv.createTable("CsvSinkTable", TableDescriptor.forConnector("upsert-kafka")
                     .schema(outputSchema)
                     .option("topic", RECOMMENDATION_TOPIC)
-                    .option("properties.bootstrap.servers","localhost:9092")
+                    .option("properties.bootstrap.servers", bootstrapServers)
                     .option("key.format", "csv")
                     .option("value.format", "csv")
                     .option("value.fields-include", "ALL")
@@ -178,7 +191,7 @@ public class RetailRecommendationApp {
                     "    TUMBLE(event_time, INTERVAL '5' SECOND);");
 
             Properties props = new Properties();
-            props.put("bootstrap.servers","localhost:9092");
+            props.put("bootstrap.servers", bootstrapServers);
 
             Admin admin = Admin.create(props);
             Map<String, String> topicConfigs = new HashMap<>();
@@ -187,23 +200,23 @@ public class RetailRecommendationApp {
             admin.createTopics(Collections.singleton(outputTopic));
 
             System.out.println("Starting Click Stream Data Generator...");
-            Thread genThread = new Thread(new ClickStreamDataGenerator());
+            Thread genThread = new Thread(new ClickStreamDataGenerator(bootstrapServers));
             genThread.start();
 
             System.out.println("Starting Sales Data Generator");
-            Thread kafkaThread = new Thread(new SalesDataGenerator());
+            Thread kafkaThread = new Thread(new SalesDataGenerator(bootstrapServers));
             kafkaThread.start();
 
-            TableResult tableResult = recommendation.insertInto("CsvSinkTable").execute();
-            tableResult.print();
+//                TableResult tableResult = recommendation.insertInto("CsvSinkTable").execute();
+//                tableResult.print();
+
+            StatementSet stmtSet = tableEnv.createStatementSet();
+            stmtSet.add(recommendation.insertInto("CsvSinkTable"));
+            stmtSet.execute();
 
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private static String getFileFromResource(String filename) {
-        return Objects.requireNonNull(RetailRecommendationApp.class.getClassLoader().getResource(filename)).getPath();
     }
 }
 
