@@ -47,7 +47,7 @@ CREATE TABLE CsvSinkTable (
  PRIMARY KEY(`user_id`) NOT ENFORCED
 ) WITH (
  'connector' = 'upsert-kafka',
- 'topic' = 'flink.recommendation',
+ 'topic' = 'flink.recommended.products',
  'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.default.svc:9092',
  'properties.client.id' = 'recommended-products-producer-client',
  'properties.transaction.timeout.ms' = '800000',

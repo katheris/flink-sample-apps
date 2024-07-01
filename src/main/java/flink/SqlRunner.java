@@ -73,7 +73,7 @@ public class SqlRunner {
         Admin admin = Admin.create(props);
         Map<String, String> topicConfigs = new HashMap<>();
         topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
-        var outputTopic = new NewTopic("flink.recommendation", 1, (short) 1).configs(topicConfigs);
+        var outputTopic = new NewTopic("flink.recommended.products", 1, (short) 1).configs(topicConfigs);
         admin.createTopics(Collections.singleton(outputTopic));
 
         System.out.println("Starting Click Stream Data Generator...");
