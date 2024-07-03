@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.util.FileUtils;
 
@@ -65,7 +65,11 @@ public class SqlRunner {
 
         var statements = parseStatements(script);
 
-        var tableEnv = TableEnvironment.create(new Configuration());
+        EnvironmentSettings settings = EnvironmentSettings
+                .newInstance()
+                .inStreamingMode()
+                .build();
+        var tableEnv = TableEnvironment.create(settings);
 
         Properties props = new Properties();
         props.put("bootstrap.servers", bootstrapServers);
