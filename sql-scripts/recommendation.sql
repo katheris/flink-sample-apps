@@ -17,7 +17,7 @@ CREATE TABLE ClickStreamTable (
 ) WITH (
  'connector' = 'kafka',
  'topic' = 'flink.click.streams',
- 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.default.svc:9092',
+ 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.flink.svc:9092',
  'properties.group.id' = 'click-stream-group',
  'format' = 'csv',
  'scan.startup.mode' = 'latest-offset'
@@ -34,7 +34,7 @@ CREATE TABLE SalesRecordTable (
 ) WITH (
  'connector' = 'kafka',
  'topic' = 'flink.sales.records',
- 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.default.svc:9092',
+ 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.flink.svc:9092',
  'properties.group.id' = 'sales-record-group',
  'format' = 'csv',
  'scan.startup.mode' = 'latest-offset'
@@ -48,7 +48,7 @@ CREATE TABLE CsvSinkTable (
 ) WITH (
  'connector' = 'upsert-kafka',
  'topic' = 'flink.recommended.products',
- 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.default.svc:9092',
+ 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.flink.svc:9092',
  'properties.client.id' = 'recommended-products-producer-client',
  'properties.transaction.timeout.ms' = '800000',
  'key.format' = 'csv',
@@ -107,7 +107,7 @@ CREATE TABLE test (
 ) WITH (
  'connector' = 'upsert-kafka',
  'topic' = 'flink.test',
- 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.default.svc:9092',
+ 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.flink.svc:9092',
  'properties.client.id' = 'test-producer-client',
  'properties.transaction.timeout.ms' = '800000',
  'key.format' = 'csv',
