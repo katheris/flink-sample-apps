@@ -24,42 +24,47 @@ These steps are for runnig a Flink job based on the SQL statements with Strimzi 
 
 1. Start minikube with the following resources.
 
-```
-MINIKUBE_CPUS=4
-MINIKUBE_MEMORY=16384
-MINIKUBE_DISK_SIZE=25GB
-```
+   ```
+   MINIKUBE_CPUS=4
+   MINIKUBE_MEMORY=16384
+   MINIKUBE_DISK_SIZE=25GB
+   ```
 
-2. Apply the Strimzi QuickStart:
+2. Create a `flink` namespace:
    ```
-   kubectl create -f 'https://strimzi.io/install/latest?namespace=default' -n default
+   kubectl create namespace flink
    ```
-3. Create a Kafka
+
+3. Apply the Strimzi QuickStart:
    ```
-   oc apply -f kafka.yaml
+   kubectl create -f 'https://strimzi.io/install/latest?namespace=flink' -n flink
    ```
-4. Install cert-manager:
+4. Create a Kafka
+   ```
+   kubectl apply -f kafka.yaml -n flink
+   ```
+5. Install cert-manager (this creates cert-manager in a namespace called `cert-manager`):
    ```
    kubectl create -f https://github.com/jetstack/cert-manager/releases/download/v1.8.2/cert-manager.yaml
    ```
-5. Deploy Flink Kubernetes Operator 1.8.0 (the latest stable version):
+6. Deploy Flink Kubernetes Operator 1.8.0 (the latest stable version):
    ```
     helm repo add flink-operator-repo https://downloads.apache.org/flink/flink-kubernetes-operator-1.8.0/
-    helm install flink-kubernetes-operator flink-operator-repo/flink-kubernetes-operator
+    helm install flink-kubernetes-operator flink-operator-repo/flink-kubernetes-operator -n flink
    ```
-6. Build the image like this:
+7. Build the image like this:
    ```
    mvn clean package && minikube image build . -t recommendation-app:latest
    ```
 
 8. Create the `FlinkDeployment`:
    ```
-   kubectl apply -f recommendation-app.yaml
+   kubectl apply -f recommendation-app.yaml -n flink
    ```
 9. In a separate tab, `exec` into the kafka pod and run the console consumer:
    ```
-   kubectl exec -it <kafka pod> bash
-   ./bin/kafka-console-consumer --bootstrap-server localhost:9092 --topic flink.recommended.products --from-beginning 
+   kubectl exec -it my-cluster-dual-role-0 -n flink -- /bin/bash \
+   ./bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic flink.recommended.products --from-beginning
    ```
 10. You should see messages such as the following:
    ```
