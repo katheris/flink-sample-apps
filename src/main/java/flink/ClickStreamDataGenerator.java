@@ -38,7 +38,7 @@ public class ClickStreamDataGenerator implements Runnable{
             while (true) {
                 String productId = String.valueOf(Math.abs(random.nextInt(200)));
 
-                String userId = String.valueOf(Math.abs(random.nextInt(100)));
+                String userId = "user-" + Math.abs(random.nextInt(100));
 
                 String[] recordInCSV = {userId, productId};
 
@@ -51,7 +51,7 @@ public class ClickStreamDataGenerator implements Runnable{
 
                 producer.send(record).get();
 
-                System.out.println("Kafka Click Stream Generator : Sending Event with : " +
+                System.out.println("Kafka Click Stream Generator : Sent Event with : " +
                         "userId: " + recordInCSV[0] + " productId: " + recordInCSV[1]);
 
                 Thread.sleep(3000);

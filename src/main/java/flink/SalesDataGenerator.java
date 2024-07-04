@@ -37,7 +37,7 @@ public class SalesDataGenerator implements Runnable {
             //Generate 100 sample sale records
             while (true) {
 
-                String userId = String.valueOf(Math.abs(random.nextInt(100)));
+                String userId = "user-" + Math.abs(random.nextInt(100));
 
                 String invoiceId = String.valueOf(Math.abs(random.nextLong()));
 
@@ -45,7 +45,7 @@ public class SalesDataGenerator implements Runnable {
 
                 String quantity = String.valueOf(Math.abs(random.nextInt(3) + 1));
 
-                String cost = String.valueOf(Math.abs(random.nextInt(1000) + 1));
+                String cost = "£" + Math.abs(random.nextInt(1000) + 1);
 
                 String[] recordInCSV = {invoiceId, userId, productId,
                         quantity, cost};
@@ -60,7 +60,7 @@ public class SalesDataGenerator implements Runnable {
 
                 producer.send(record).get();
 
-                System.out.println("Kafka Sales Data Generator : Sending Event with : "
+                System.out.println("Kafka Sales Data Generator : Sent Event with : "
                         + "userId: " + recordInCSV[1] + " productId: " + recordInCSV[2]);
 
                 //Sleep for a random time ( 1 - 3 secs) before the next record.
