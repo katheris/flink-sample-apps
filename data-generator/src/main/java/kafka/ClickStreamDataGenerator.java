@@ -1,4 +1,4 @@
-package flink;
+package kafka;
 
 import java.util.Properties;
 import java.util.Random;

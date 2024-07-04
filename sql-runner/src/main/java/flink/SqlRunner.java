@@ -81,14 +81,6 @@ public class SqlRunner {
         var outputTopic = new NewTopic("flink.recommended.products", 1, (short) 1).configs(topicConfigs);
         admin.createTopics(Collections.singleton(outputTopic));
 
-        System.out.println("Starting Click Stream Data Generator...");
-        Thread csThread = new Thread(new ClickStreamDataGenerator(bootstrapServers));
-        csThread.start();
-
-        System.out.println("Starting Sales Data Generator");
-        Thread kafkaThread = new Thread(new SalesDataGenerator(bootstrapServers));
-        kafkaThread.start();
-
         for (String statement : statements) {
             Matcher setMatcher = SET_STATEMENT_PATTERN.matcher(statement.trim());
 
