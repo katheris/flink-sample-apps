@@ -20,5 +20,5 @@ spec:
   job:
     jarURI: local:///opt/flink/usrlib/sql-runner.jar
     args: ["/opt/flink/usrlib/sql-scripts/recommendation.sql", "my-cluster-kafka-bootstrap.flink.svc:9092"]
-    parallelism: 2
+    parallelism: 1
     upgradeMode: stateless
