@@ -100,21 +100,6 @@ SELECT
 FROM
    category_products cp;
 
-CREATE TABLE test (
- user_id STRING,
- top_product_ids STRING,
- PRIMARY KEY(`user_id`) NOT ENFORCED
-) WITH (
- 'connector' = 'upsert-kafka',
- 'topic' = 'flink.test',
- 'properties.bootstrap.servers' = 'my-cluster-kafka-bootstrap.flink.svc:9092',
- 'properties.client.id' = 'test-producer-client',
- 'properties.transaction.timeout.ms' = '800000',
- 'key.format' = 'csv',
- 'value.format' = 'csv',
- 'value.fields-include' = 'ALL'
-);
-
 INSERT INTO CsvSinkTable
 SELECT
    user_id,

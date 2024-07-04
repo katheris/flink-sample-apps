@@ -70,6 +70,7 @@ public class SqlRunner {
                 .inStreamingMode()
                 .build();
         var tableEnv = TableEnvironment.create(settings);
+        System.out.println("TableEnv config: " + tableEnv.getConfig().toMap());
 
         Properties props = new Properties();
         props.put("bootstrap.servers", bootstrapServers);
