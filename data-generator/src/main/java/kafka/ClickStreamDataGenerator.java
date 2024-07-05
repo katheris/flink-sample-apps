@@ -1,27 +1,30 @@
-package flink;
+package kafka;
 
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
-public class SalesDataGenerator implements Runnable {
-    final String bootstrapServers;
-    public SalesDataGenerator(String bootstrapServers) {
-        this.bootstrapServers = bootstrapServers;
+public class ClickStreamDataGenerator implements Runnable{
+    final String bootstrapServer;
+    public ClickStreamDataGenerator(String bootstrapServer) {
+        this.bootstrapServer = bootstrapServer;
     }
 
     public static void main(String[] args) {
-        SalesDataGenerator ksdg = new SalesDataGenerator(args[0]);
-        ksdg.run();
+        ClickStreamDataGenerator csdg = new ClickStreamDataGenerator(args[0]);
+        csdg.run();
     }
 
     @Override
     public void run() {
+        Random random = new Random();
+
         //Create Kafka Client
         Properties props = new Properties();
-        props.put("bootstrap.servers", bootstrapServers);
+        props.put("bootstrap.servers", bootstrapServer);
 
         props.put("key.serializer",
                 "org.apache.kafka.common.serialization.StringSerializer");
@@ -32,45 +35,36 @@ public class SalesDataGenerator implements Runnable {
 
         try {
 
-            Random random = new Random();
-
-            //Generate 100 sample sale records
             while (true) {
-
-                String userId = String.valueOf(Math.abs(random.nextInt(100)));
-
-                String invoiceId = String.valueOf(Math.abs(random.nextLong()));
-
                 String productId = String.valueOf(Math.abs(random.nextInt(200)));
 
-                String quantity = String.valueOf(Math.abs(random.nextInt(3) + 1));
+                String userId = "user-" + Math.abs(random.nextInt(100));
 
-                String cost = String.valueOf(Math.abs(random.nextInt(1000) + 1));
-
-                String[] recordInCSV = {invoiceId, userId, productId,
-                        quantity, cost};
-
+                String[] recordInCSV = {userId, productId};
 
                 String key = String.valueOf(System.currentTimeMillis());
                 ProducerRecord<String, String> record =
                         new ProducerRecord<String,String>(
-                                "flink.sales.records",
+                                "flink.click.streams",
                                 key,
                                 String.join(",", recordInCSV)  );
 
                 producer.send(record).get();
 
-                System.out.println("Kafka Sales Data Generator : Sending Event with : "
-                        + "userId: " + recordInCSV[1] + " productId: " + recordInCSV[2]);
+                System.out.println("Kafka Click Stream Generator : Sent Event with : " +
+                        "userId: " + recordInCSV[0] + " productId: " + recordInCSV[1]);
 
-                //Sleep for a random time ( 1 - 3 secs) before the next record.
-                Thread.sleep(random.nextInt(2000) + 1);
+                Thread.sleep(3000);
+
             }
 
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (ExecutionException e) {
             throw new RuntimeException(e);
         } finally {
             producer.close();
         }
     }
 }
+

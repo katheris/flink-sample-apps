@@ -54,26 +54,31 @@ These steps are for runnig a Flink job based on the SQL statements with Strimzi 
    ```
 7. Build the image like this:
    ```
-   mvn clean package && minikube image build . -t recommendation-app:latest
+   mvn clean package && minikube image build data-generator -t data-generator:latest && minikube image build sql-runner -t recommendation-app:latest
    ```
 
-8. Create the `FlinkDeployment`:
+8. Create the data generator Kubernetes Deployment:
+   ```
+   kubectl apply -f data-generator.yaml -n flink
+   ```
+
+9. Create the `FlinkDeployment`:
    ```
    kubectl apply -f recommendation-app.yaml -n flink
    ```
-9. In a separate tab, `exec` into the kafka pod and run the console consumer:
+10. In a separate tab, `exec` into the kafka pod and run the console consumer:
+    ```
+    kubectl exec -it my-cluster-dual-role-0 -n flink -- /bin/bash \
+    ./bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic flink.recommended.products --from-beginning
+    ```
+11. You should see messages such as the following:
    ```
-   kubectl exec -it my-cluster-dual-role-0 -n flink -- /bin/bash \
-   ./bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic flink.recommended.products --from-beginning
+    user-27,"140,13,137,95,39,138","2024-06-28 13:01:55"
+    user-14,"40,146,74,81,37,19","2024-06-28 13:01:55"
+    user-36,"42,106,82,153,158,85","2024-06-28 13:02:00"
+    user-5,"83,123,77,41,193,136","2024-06-28 13:02:00"
+    user-27,"55,77,168","2024-06-28 13:02:05"
+    user-44,"140,95,166,134,199,180","2024-06-28 13:02:10"
+    user-15,"26,171,1,190,87,32","2024-06-28 13:02:10"
    ```
-10. You should see messages such as the following:
-   ```
-    27,"140,13,137,95,39,138","2024-06-28 13:01:55"
-    14,"40,146,74,81,37,19","2024-06-28 13:01:55"
-    36,"42,106,82,153,158,85","2024-06-28 13:02:00"
-    5,"83,123,77,41,193,136","2024-06-28 13:02:00"
-    27,"55,77,168","2024-06-28 13:02:05"
-    44,"140,95,166,134,199,180","2024-06-28 13:02:10"
-    15,"26,171,1,190,87,32","2024-06-28 13:02:10"
-   ```
-   The expected format of the result is `userId`, `coma separated 6 product ids` and `timestamp` of the window.
+   The expected format of the result is `userId`, `comma separated 6 product ids` and `timestamp` of the window.
