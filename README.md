@@ -41,7 +41,7 @@ These steps are for runnig a Flink job based on the SQL statements with Strimzi 
    ```
 4. Create a Kafka
    ```
-   kubectl apply -f kafka.yaml -n flink
+   kubectl apply -f https://strimzi.io/examples/latest/kafka/kraft/kafka-single-node.yaml -n flink 
    ```
 5. Install cert-manager (this creates cert-manager in a namespace called `cert-manager`):
    ```
