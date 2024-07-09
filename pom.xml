@@ -14,6 +14,9 @@
         <flink.version>1.19.0</flink.version>
         <kafka.version>3.7.0</kafka.version>
         <flink.kafka.connector.version>3.2.0-1.19</flink.kafka.connector.version>
+        <flink.avro.confluent.registry.version>1.19.1</flink.avro.confluent.registry.version>
+        <avro.version>1.8.1</avro.version>
+        <apicurio-registry.version>2.6.1.Final</apicurio-registry.version>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

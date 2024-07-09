@@ -1,26 +1,30 @@
 package kafka;
 
-import java.util.Properties;
-import java.util.Random;
+import kafka.schema.Sales;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
-public class SalesDataGenerator implements Runnable {
-    final public static String TOPIC = "flink.sales.records";
+import java.util.Random;
+
+public class SalesDataGeneratorAvro implements Runnable {
     final String bootstrapServers;
-    public SalesDataGenerator(String bootstrapServers) {
+    final String registryUrl;
+    public SalesDataGeneratorAvro(String bootstrapServers, String registryUrl) {
         this.bootstrapServers = bootstrapServers;
+        this.registryUrl = registryUrl;
     }
 
     public static void main(String[] args) {
-        SalesDataGenerator ksdg = new SalesDataGenerator(args[0]);
+        SalesDataGeneratorAvro ksdg = new SalesDataGeneratorAvro(args[0], args[1]);
         ksdg.run();
     }
 
     @Override
     public void run() {
-        Producer<String,String> producer = new KafkaProducer<>(KafkaClientProps.csv(bootstrapServers));
+        Producer<String, Object> producer = new KafkaProducer<>(KafkaClientProps.avro(bootstrapServers, registryUrl));
 
         try {
 
@@ -39,21 +43,23 @@ public class SalesDataGenerator implements Runnable {
 
                 String cost = "£" + Math.abs(random.nextInt(1000) + 1);
 
-                String[] recordInCSV = {invoiceId, userId, productId,
-                        quantity, cost};
-
-
                 String key = String.valueOf(System.currentTimeMillis());
-                ProducerRecord<String, String> record =
-                        new ProducerRecord<String,String>(
-                                TOPIC,
+                GenericRecord avroRecord = new GenericData.Record(Sales.SCHEMA$);
+                avroRecord.put("user_id", userId);
+                avroRecord.put("product_id", productId);
+                avroRecord.put("invoice_id", invoiceId);
+                avroRecord.put("quantity", quantity);
+                avroRecord.put("unit_cost", cost);
+                ProducerRecord<String, Object> record =
+                        new ProducerRecord<>(
+                                SalesDataGenerator.TOPIC,
                                 key,
-                                String.join(",", recordInCSV)  );
+                                avroRecord);
 
                 producer.send(record).get();
 
                 System.out.println("Kafka Sales Data Generator : Sent Event with : "
-                        + "userId: " + recordInCSV[1] + " productId: " + recordInCSV[2]);
+                        + "userId: " + userId + " productId: " + productId);
 
                 //Sleep for a random time ( 1 - 3 secs) before the next record.
                 Thread.sleep(random.nextInt(2000) + 1);

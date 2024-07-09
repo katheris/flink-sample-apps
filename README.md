@@ -82,3 +82,18 @@ These steps are for runnig a Flink job based on the SQL statements with Strimzi 
     user-15,"26,171,1,190,87,32","2024-06-28 13:02:10"
    ```
    The expected format of the result is `userId`, `comma separated 6 product ids` and `timestamp` of the window.
+
+# Running recommendation app with Avro records
+
+You can also run the app against topics that contain Avro records, rather than CSV records.
+To run with Avro:
+1. In `data-generator.yaml` uncomment the `USE_APICURIO_REGISTRY` and `REGISTRY_URL` env vars.
+2. In `recommendation-app.yaml` change `/opt/flink/usrlib/sql-scripts/recommendation.sql` to `/opt/flink/usrlib/sql-scripts/recommendation-avro.sql`.
+3. Follows the steps to run the recommendation app shown above, but after creating the `flink` namespace run the following to start up Apicurio Registry:
+  ```
+  kubectl apply -f apicurio-registry.yaml -n flink
+  ```
+
+This version of the demo will start Apicurio Registry with a service to access the API.
+The  `flink.click.streams` and `flink.sales.records` topics will both contain Avro records.
+You can view the Apicurio Registry UI by running `kubectl port-forward service/apicurio-registry-api 8080 -n flink` and visiting http://localhost:8080/ui in a browser.

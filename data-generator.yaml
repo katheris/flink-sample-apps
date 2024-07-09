@@ -21,3 +21,7 @@ spec:
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: "my-cluster-kafka-bootstrap.flink.svc:9092"
+#            - name: USE_APICURIO_REGISTRY
+#              value: "true"
+#            - name: REGISTRY_URL
+#              value: "http://apicurio-registry-api.flink.svc:8080/apis/registry/v2"
